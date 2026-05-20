@@ -9,3 +9,4 @@ uploads
 *.tsbuildinfo
 frontend/.vercel
 backend/prisma/migrations/dev.db
+.pnpm-store
