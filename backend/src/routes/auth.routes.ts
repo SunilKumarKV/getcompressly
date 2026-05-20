@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import { Router } from "express";
 import type { Response } from "express";
 import { z } from "zod";
@@ -6,6 +7,7 @@ import { prisma } from "../config/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { authRateLimiter } from "../middleware/rateLimiters.js";
 import { clearAuthCookies, createRefreshToken, getRefreshTokenFromRequest, revokeRefreshToken, rotateRefreshToken, setAuthCookies, signAccessToken } from "../services/auth.service.js";
+import { createSecureToken, sendPasswordResetEmail, sendVerificationEmail } from "../services/email.service.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
@@ -21,6 +23,9 @@ const loginSchema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
   password: z.string().min(1)
 });
+const forgotSchema = z.object({ email: z.string().email().transform((value) => value.toLowerCase()) });
+const resetSchema = z.object({ token: z.string().min(20), password: z.string().min(8).max(128) });
+const verifySchema = z.object({ token: z.string().min(20) });
 
 function toUserDto(user: { id: string; name: string; email: string; role: string; plan: string; createdAt: Date }) {
   return { id: user.id, name: user.name, email: user.email, role: user.role, plan: user.plan, createdAt: user.createdAt };
@@ -41,7 +46,17 @@ router.post(
     const existing = await prisma.user.findUnique({ where: { email: body.email } });
     if (existing) throw new AppError("Email is already registered", 409, "EMAIL_EXISTS");
     const passwordHash = await bcrypt.hash(body.password, 12);
-    const user = await prisma.user.create({ data: { name: body.name, email: body.email, passwordHash } });
+    const verification = createSecureToken();
+    const user = await prisma.user.create({
+      data: {
+        name: body.name,
+        email: body.email,
+        passwordHash,
+        emailVerificationToken: verification.hash,
+        emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000)
+      }
+    });
+    void sendVerificationEmail(user.email, verification.token).catch((error) => console.error("verification email failed", error));
     res.status(201).json({ user: toUserDto(user), token: await issueSession(res, user.id) });
   })
 );
@@ -86,5 +101,59 @@ router.post("/logout", asyncHandler(async (req, res) => {
   clearAuthCookies(res);
   res.status(204).send();
 }));
+
+router.post(
+  "/forgot-password",
+  authRateLimiter,
+  asyncHandler(async (req, res) => {
+    const body = forgotSchema.parse(req.body);
+    const user = await prisma.user.findUnique({ where: { email: body.email } });
+    if (user) {
+      const reset = createSecureToken();
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordResetToken: reset.hash, passwordResetExpires: new Date(Date.now() + 60 * 60 * 1000) }
+      });
+      void sendPasswordResetEmail(user.email, reset.token).catch((error) => console.error("password reset email failed", error));
+    }
+    res.json({ message: "If that email exists, a reset link has been sent." });
+  })
+);
+
+router.post(
+  "/reset-password",
+  authRateLimiter,
+  asyncHandler(async (req, res) => {
+    const body = resetSchema.parse(req.body);
+    const tokenHash = createHash(body.token);
+    const user = await prisma.user.findFirst({ where: { passwordResetToken: tokenHash, passwordResetExpires: { gt: new Date() } } });
+    if (!user) throw new AppError("Reset link is invalid or expired", 400, "RESET_INVALID");
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: await bcrypt.hash(body.password, 12), passwordResetToken: null, passwordResetExpires: null }
+    });
+    res.json({ message: "Password has been reset." });
+  })
+);
+
+router.post(
+  "/verify-email",
+  authRateLimiter,
+  asyncHandler(async (req, res) => {
+    const body = verifySchema.parse(req.body);
+    const tokenHash = createHash(body.token);
+    const user = await prisma.user.findFirst({ where: { emailVerificationToken: tokenHash, emailVerificationExpires: { gt: new Date() } } });
+    if (!user) throw new AppError("Verification link is invalid or expired", 400, "VERIFY_INVALID");
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: true, emailVerificationToken: null, emailVerificationExpires: null }
+    });
+    res.json({ message: "Email verified." });
+  })
+);
+
+function createHash(token: string) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
 
 export default router;

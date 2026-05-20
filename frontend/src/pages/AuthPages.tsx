@@ -42,6 +42,7 @@ function AuthForm({ mode }: { mode: "login" | "register" }) {
           {mode === "login" ? "New here? " : "Already registered? "}
           <Link className="text-emerald-600" to={mode === "login" ? "/register" : "/login"}>{mode === "login" ? "Create an account" : "Login"}</Link>
         </p>
+        {mode === "login" && <p className="mt-2 text-center text-sm"><Link className="text-emerald-600" to="/forgot-password">Forgot password?</Link></p>}
       </form>
     </section>
   );

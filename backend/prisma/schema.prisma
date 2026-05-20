@@ -15,6 +15,8 @@ enum Role {
 enum PlanType {
   FREE
   PRO
+  PRO_MONTHLY
+  PRO_YEARLY
 }
 
 enum CompressionLevel {
@@ -42,8 +44,17 @@ model User {
   passwordHash    String
   role            Role             @default(USER)
   plan            PlanType         @default(FREE)
+  stripeCustomerId String?          @unique
+  subscriptionStatus String         @default("free")
+  subscriptionCurrentPeriodEnd DateTime?
+  emailVerified   Boolean          @default(false)
+  emailVerificationToken String?
+  emailVerificationExpires DateTime?
+  passwordResetToken String?
+  passwordResetExpires DateTime?
   compressionJobs CompressionJob[]
   usageLogs       UsageLog[]
+  usageMetrics    UsageMetric[]
   refreshTokens   RefreshToken[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -73,16 +84,24 @@ model CompressionJob {
   compressionLevel CompressionLevel
   fileType         FileType
   status           JobStatus        @default(PENDING)
+  progress         Int              @default(0)
+  stage            String           @default("queued")
+  retryCount       Int              @default(0)
+  retryable        Boolean          @default(true)
+  canceledAt       DateTime?
   errorMessage     String?
   originalPath      String
   compressedPath    String?
   downloadToken    String           @unique
+  guestRecoveryTokenHash String?
+  guestRecoveryExpiresAt DateTime?
   expiresAt        DateTime
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
   @@index([userId, createdAt])
   @@index([downloadToken])
+  @@index([guestRecoveryTokenHash])
   @@index([expiresAt])
 }
 
@@ -100,11 +119,40 @@ model UsageLog {
 }
 
 model Plan {
-  id           String   @id @default(cuid())
-  name         PlanType @unique
-  dailyLimit   Int
-  maxFileSizeMb Int
-  batchLimit   Int
-  priceMonthly Int
-  createdAt    DateTime @default(now())
+  id                   String   @id @default(cuid())
+  name                 PlanType @unique
+  dailyLimit           Int
+  maxFileSizeMb        Int
+  batchLimit           Int
+  priceMonthly         Int
+  stripePriceIdMonthly String?
+  stripePriceIdYearly  String?
+  createdAt            DateTime @default(now())
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  eventId     String
+  payload     Json
+  processedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+}
+
+model UsageMetric {
+  id             String   @id @default(cuid())
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  date           DateTime
+  uploadsCount   Int      @default(0)
+  successCount   Int      @default(0)
+  failedCount    Int      @default(0)
+  bytesUploaded  BigInt   @default(0)
+  bytesSaved     BigInt   @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([date])
 }

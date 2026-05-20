@@ -11,6 +11,8 @@ import { Login, Register } from "./pages/AuthPages";
 import { Dashboard } from "./pages/Dashboard";
 import { Pricing } from "./pages/Pricing";
 import { Admin } from "./pages/Admin";
+import { ForgotPassword, ResetPassword, VerifyEmail } from "./pages/AccountRecovery";
+import { GuestRecovery } from "./pages/GuestRecovery";
 import { Privacy, Terms } from "./pages/Legal";
 import { NotFound } from "./pages/NotFound";
 import "./index.css";
@@ -23,6 +25,10 @@ const router = createBrowserRouter([
       { path: "/compress", element: <Compress /> },
       { path: "/login", element: <Login /> },
       { path: "/register", element: <Register /> },
+      { path: "/forgot-password", element: <ForgotPassword /> },
+      { path: "/reset-password", element: <ResetPassword /> },
+      { path: "/verify-email", element: <VerifyEmail /> },
+      { path: "/guest-recovery", element: <GuestRecovery /> },
       { path: "/pricing", element: <Pricing /> },
       { path: "/privacy", element: <Privacy /> },
       { path: "/terms", element: <Terms /> },

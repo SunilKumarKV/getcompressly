@@ -66,12 +66,21 @@ MAX_IMAGE_PIXELS=100000000
 CLAMAV_ENABLED=false
 CLAMAV_HOST=
 CLAMAV_PORT=
+APP_URL=http://localhost:5173
+API_URL=http://localhost:5000
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_MONTHLY=
+STRIPE_PRICE_YEARLY=
+RESEND_API_KEY=
+EMAIL_FROM=hello@getcompressly.com
 ```
 
 Frontend:
 
 ```bash
 VITE_API_URL=http://localhost:5000/api
+VITE_STRIPE_PUBLISHABLE_KEY=
 ```
 
 ## Scripts
@@ -121,6 +130,40 @@ PDFs use Ghostscript first, then qpdf. If neither is installed, the job is marke
 
 The API creates `PENDING` compression jobs and returns immediately. A separate BullMQ worker updates jobs to `PROCESSING`, `COMPLETED`, or `FAILED`. The frontend polls `GET /api/compress/jobs/:id` and only shows downloads for completed jobs.
 
+## Billing
+
+Stripe powers subscription billing. The backend creates Checkout Sessions and Billing Portal sessions; plan changes are applied only from verified Stripe webhooks.
+
+Required Stripe setup:
+
+1. Create monthly and yearly recurring Stripe prices for GetCompressly Pro.
+2. Set `STRIPE_SECRET_KEY`, `STRIPE_PRICE_MONTHLY`, and `STRIPE_PRICE_YEARLY`.
+3. Create a webhook endpoint at `https://api.getcompressly.com/api/billing/webhook`.
+4. Subscribe to `checkout.session.completed`, `invoice.payment_succeeded`, `invoice.payment_failed`, `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted`.
+5. Set `STRIPE_WEBHOOK_SECRET`.
+
+Local webhook testing:
+
+```bash
+stripe listen --forward-to localhost:5000/api/billing/webhook
+stripe trigger checkout.session.completed
+```
+
+The app stores Stripe webhook event IDs in `WebhookEvent` so duplicate events are ignored safely.
+
+## Email
+
+Resend powers transactional email for verification, password reset, download-ready notifications, and payment receipt notifications.
+
+Required Resend setup:
+
+1. Verify `getcompressly.com` in Resend.
+2. Create an API key.
+3. Set `RESEND_API_KEY` and `EMAIL_FROM=hello@getcompressly.com`.
+4. In production, missing Resend env vars fail startup through config validation.
+
+Password reset and email verification tokens are hashed before storage and expire server-side.
+
 ## Health Checks
 
 - `GET /api/health`: basic API/database health.
@@ -169,6 +212,7 @@ Worker on Render or Railway:
 - Build command: `pnpm install --frozen-lockfile && pnpm prisma:generate && pnpm build`
 - Start command: `pnpm start:worker`
 - Set the same `DATABASE_URL`, `REDIS_URL`, and `STORAGE_PROVIDER` env vars as the API
+- Also set Stripe and Resend env vars on the API service. The worker can send download-ready emails, so set `RESEND_API_KEY` and `EMAIL_FROM` there too.
 
 Storage:
 
@@ -200,6 +244,14 @@ PostgreSQL:
 - Confirm guest/free files above 10 MB are rejected and Pro limits can allow up to 200 MB.
 - Confirm logout revokes the refresh session and refresh no longer works.
 - Confirm rate limits trigger for repeated auth and compression attempts.
+- Confirm Stripe checkout opens for monthly and yearly plans.
+- Confirm Stripe webhook upgrades a user to `PRO_MONTHLY` or `PRO_YEARLY`.
+- Confirm billing portal opens for subscribed users.
+- Confirm dashboard shows subscription status, renewal date, usage, bytes saved, and job progress.
+- Confirm failed jobs can retry until `MAX_JOB_RETRIES`.
+- Confirm queued/processing jobs can be canceled.
+- Confirm guest recovery token restores guest job history until expiry.
+- Confirm forgot password and verify email flows send Resend emails.
 - Run `pnpm --filter @getcompressly/backend cleanup` and verify expired jobs are removed.
 - Run `pnpm build` before deployment.
 

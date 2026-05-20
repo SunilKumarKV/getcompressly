@@ -14,4 +14,30 @@ await prisma.plan.upsert({
   create: { name: PlanType.PRO, dailyLimit: Number(process.env.PRO_DAILY_LIMIT ?? 100), maxFileSizeMb: Number(process.env.PRO_MAX_FILE_SIZE_MB ?? 200), batchLimit: 20, priceMonthly: 1200 }
 });
 
+for (const [name, priceMonthly] of [
+  [PlanType.PRO_MONTHLY, 1200],
+  [PlanType.PRO_YEARLY, 999]
+] as const) {
+  await prisma.plan.upsert({
+    where: { name },
+    update: {
+      dailyLimit: Number(process.env.PRO_DAILY_LIMIT ?? 100),
+      maxFileSizeMb: Number(process.env.PRO_MAX_FILE_SIZE_MB ?? 200),
+      batchLimit: 20,
+      priceMonthly,
+      stripePriceIdMonthly: process.env.STRIPE_PRICE_MONTHLY || null,
+      stripePriceIdYearly: process.env.STRIPE_PRICE_YEARLY || null
+    },
+    create: {
+      name,
+      dailyLimit: Number(process.env.PRO_DAILY_LIMIT ?? 100),
+      maxFileSizeMb: Number(process.env.PRO_MAX_FILE_SIZE_MB ?? 200),
+      batchLimit: 20,
+      priceMonthly,
+      stripePriceIdMonthly: process.env.STRIPE_PRICE_MONTHLY || null,
+      stripePriceIdYearly: process.env.STRIPE_PRICE_YEARLY || null
+    }
+  });
+}
+
 await prisma.$disconnect();

@@ -23,6 +23,15 @@ const envSchema = z
   TEMP_FILE_EXPIRY_HOURS: z.coerce.number().positive().default(24),
   FREE_DAILY_LIMIT: z.coerce.number().positive().default(5),
   PRO_DAILY_LIMIT: z.coerce.number().positive().default(100),
+  MAX_JOB_RETRIES: z.coerce.number().int().positive().default(3),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_PRICE_MONTHLY: z.string().optional(),
+  STRIPE_PRICE_YEARLY: z.string().optional(),
+  APP_URL: z.string().url().default("http://localhost:5173"),
+  API_URL: z.string().url().default("http://localhost:5000"),
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().email().optional(),
   REDIS_URL: z.string().optional(),
   STORAGE_PROVIDER: z.enum(["local", "s3"]).default("local"),
   AWS_REGION: z.string().optional(),
@@ -50,6 +59,9 @@ const envSchema = z
       }
       if (!process.env.DATABASE_URL) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["DATABASE_URL"], message: "DATABASE_URL is required in production" });
+      }
+      for (const key of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_MONTHLY", "STRIPE_PRICE_YEARLY", "RESEND_API_KEY", "EMAIL_FROM"] as const) {
+        if (!value[key]) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `${key} is required in production` });
       }
     }
     if (value.STORAGE_PROVIDER === "s3") {

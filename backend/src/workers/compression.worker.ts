@@ -18,7 +18,9 @@ const worker = new Worker<CompressionQueuePayload>(
   compressionQueueName,
   async (job) => {
     console.log(`processing compression job ${job.data.jobId}, attempt ${job.attemptsMade + 1}`);
-    await processCompressionJob(job.data.jobId);
+    await processCompressionJob(job.data.jobId, async (percentage, stage) => {
+      await job.updateProgress({ percentage, stage });
+    });
   },
   { connection, concurrency: 2 }
 );

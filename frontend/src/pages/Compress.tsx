@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, UploadCloud, XCircle } from "lucide-react";
+import { Download, RefreshCw, Square, UploadCloud, XCircle } from "lucide-react";
 import type { CompressionLevel } from "@getcompressly/shared";
 import type { JobsResponse } from "../types";
 import { api, downloadUrl, getApiError } from "../lib/api";
@@ -69,6 +69,10 @@ export function Compress() {
     form.append("compressionLevel", level);
     try {
       const { data } = await api.post<JobsResponse>("/compress", form);
+      data.jobs.forEach((job) => {
+        const token = (job as JobsResponse["jobs"][number] & { guestRecoveryToken?: string }).guestRecoveryToken;
+        if (token) localStorage.setItem("getcompressly_guest_recovery", token);
+      });
       setJobs(data.jobs);
       setFiles([]);
     } catch (err) {
@@ -76,6 +80,14 @@ export function Compress() {
     } finally {
       setLoading(false);
     }
+  }
+  async function cancel(id: string) {
+    const { data } = await api.post<{ job: JobsResponse["jobs"][number] }>(`/compress/cancel/${id}`);
+    setJobs((current) => current.map((job) => (job.id === id ? data.job : job)));
+  }
+  async function retry(id: string) {
+    const { data } = await api.post<{ job: JobsResponse["jobs"][number] }>(`/compress/retry/${id}`);
+    setJobs((current) => current.map((job) => (job.id === id ? data.job : job)));
   }
 
   return (
@@ -134,8 +146,14 @@ export function Compress() {
                         ? job.errorMessage
                         : job.status}
                   </p>
+                  <div className="mt-2 h-2 max-w-md overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"><div className="h-full bg-emerald-600" style={{ width: `${job.progress ?? 0}%` }} /></div>
+                  <p className="mt-1 text-xs text-slate-500">{job.stage}{job.etaSeconds ? ` · ETA ${job.etaSeconds}s` : ""}</p>
                 </div>
-                {job.downloadToken && <a className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white dark:bg-white dark:text-slate-950" href={downloadUrl(job.downloadToken)}><Download size={16} />Download</a>}
+                <div className="flex gap-2">
+                  {job.downloadToken && <a className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white dark:bg-white dark:text-slate-950" href={downloadUrl(job.downloadToken)}><Download size={16} />Download</a>}
+                  {(job.status === "PENDING" || job.status === "PROCESSING") && <button onClick={() => void cancel(job.id)} className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 dark:border-slate-700" aria-label="Cancel"><Square size={16} /></button>}
+                  {job.status === "FAILED" && <button onClick={() => void retry(job.id)} className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 dark:border-slate-700" aria-label="Retry"><RefreshCw size={16} /></button>}
+                </div>
               </div>
             ))}
           </div>

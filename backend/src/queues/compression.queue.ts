@@ -17,12 +17,14 @@ export function getCompressionQueue() {
   return queue;
 }
 
-export async function enqueueCompressionJob(jobId: string) {
+export async function enqueueCompressionJob(jobId: string, priority = 5) {
   const queue = getCompressionQueue();
   await queue.add(
     "compress-file",
     { jobId },
     {
+      jobId,
+      priority,
       attempts: 3,
       backoff: { type: "exponential", delay: 5000 },
       removeOnComplete: { age: 24 * 60 * 60, count: 1000 },

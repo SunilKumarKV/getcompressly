@@ -18,14 +18,14 @@ export async function validateImageLimits(filePath: string) {
   }
 }
 
-export async function validatePdfPageLimit(filePath: string) {
+export async function validatePdfPageLimit(filePath: string, maxPages = env.MAX_PDF_PAGES) {
   const pageCount = await getPdfPageCount(filePath);
-  if (pageCount > env.MAX_PDF_PAGES) throw new ValidationFailure(`PDF exceeds the ${env.MAX_PDF_PAGES} page limit`);
+  if (pageCount > maxPages) throw new ValidationFailure(`PDF exceeds the ${maxPages} page limit`);
 }
 
-export async function validateFileForCompression(filePath: string, fileType: FileType) {
+export async function validateFileForCompression(filePath: string, fileType: FileType, maxPdfPages = env.MAX_PDF_PAGES) {
   if (fileType === FileType.IMAGE) await validateImageLimits(filePath);
-  else await validatePdfPageLimit(filePath);
+  else await validatePdfPageLimit(filePath, maxPdfPages);
 }
 
 async function getPdfPageCount(filePath: string) {

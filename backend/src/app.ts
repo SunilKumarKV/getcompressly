@@ -6,8 +6,10 @@ import morgan from "morgan";
 import { env } from "./config/env.js";
 import authRoutes from "./routes/auth.routes.js";
 import compressRoutes from "./routes/compress.routes.js";
+import guestRoutes from "./routes/guest.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
+import billingRoutes, { stripeWebhookHandler } from "./routes/billing.routes.js";
 import healthRoutes from "./routes/health.routes.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { adminRateLimiter, globalRateLimiter } from "./middleware/rateLimiters.js";
@@ -31,6 +33,13 @@ export function createApp() {
     })
   );
   app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+  app.post("/api/billing/webhook", express.raw({ type: "application/json", limit: "1mb" }), async (req, res, next) => {
+    try {
+      await stripeWebhookHandler(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser(env.COOKIE_SECRET));
   app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"));
@@ -40,7 +49,9 @@ export function createApp() {
   app.use("/api", healthRoutes);
   app.use("/api/auth", authRoutes);
   app.use("/api/compress", compressRoutes);
+  app.use("/api/guest", guestRoutes);
   app.use("/api/user", userRoutes);
+  app.use("/api/billing", billingRoutes);
   app.use("/api/admin", adminRateLimiter, adminRoutes);
 
   app.use(notFound);

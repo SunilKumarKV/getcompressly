@@ -2,7 +2,7 @@ export type CompressionLevel = "low" | "medium" | "high";
 export type FileType = "PDF" | "IMAGE";
 export type JobStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
 export type Role = "USER" | "ADMIN";
-export type Plan = "FREE" | "PRO";
+export type Plan = "FREE" | "PRO" | "PRO_MONTHLY" | "PRO_YEARLY";
 
 export interface ApiUser {
   id: string;
@@ -22,6 +22,10 @@ export interface CompressionJobDto {
   compressionLevel: CompressionLevel;
   fileType: FileType;
   status: JobStatus;
+  progress: number;
+  stage: string;
+  retryCount: number;
+  etaSeconds?: number | null;
   errorMessage: string | null;
   downloadToken?: string;
   expiresAt: string;
@@ -35,4 +39,23 @@ export interface UsageDto {
   remainingToday: number;
   maxFileSizeMb: number;
   batchLimit: number;
+  today?: UsageMetricDto | null;
+  monthly?: UsageMetricSummary;
+}
+
+export interface UsageMetricDto {
+  date: string;
+  uploadsCount: number;
+  successCount: number;
+  failedCount: number;
+  bytesUploaded: number;
+  bytesSaved: number;
+}
+
+export interface UsageMetricSummary {
+  uploadsCount: number;
+  successCount: number;
+  failedCount: number;
+  bytesUploaded: number;
+  bytesSaved: number;
 }
