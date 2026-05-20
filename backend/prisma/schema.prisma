@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum PlanType {
+  FREE
+  PRO
+}
+
+enum CompressionLevel {
+  low
+  medium
+  high
+}
+
+enum FileType {
+  PDF
+  IMAGE
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id              String           @id @default(cuid())
+  name            String
+  email           String           @unique
+  passwordHash    String
+  role            Role             @default(USER)
+  plan            PlanType         @default(FREE)
+  compressionJobs CompressionJob[]
+  usageLogs       UsageLog[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model CompressionJob {
+  id               String           @id @default(cuid())
+  userId           String?
+  user             User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  originalFileName String
+  originalMimeType String
+  originalSize     Int
+  compressedSize   Int?
+  compressionLevel CompressionLevel
+  fileType         FileType
+  status           JobStatus        @default(PENDING)
+  errorMessage     String?
+  originalPath      String
+  compressedPath    String?
+  downloadToken    String           @unique
+  expiresAt        DateTime
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([downloadToken])
+  @@index([expiresAt])
+}
+
+model UsageLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ipAddress String
+  action    String
+  fileSize  Int
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([ipAddress, createdAt])
+}
+
+model Plan {
+  id           String   @id @default(cuid())
+  name         PlanType @unique
+  dailyLimit   Int
+  maxFileSizeMb Int
+  batchLimit   Int
+  priceMonthly Int
+  createdAt    DateTime @default(now())
+}

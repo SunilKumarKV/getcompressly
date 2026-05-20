@@ -1,0 +1,11 @@
+node_modules
+dist
+coverage
+.env
+.env.local
+.DS_Store
+uploads
+*.log
+*.tsbuildinfo
+frontend/.vercel
+backend/prisma/migrations/dev.db

@@ -1,0 +1,16 @@
+{
+  "name": "getcompressly",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Production-ready PDF and image compression SaaS monorepo.",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @getcompressly/backend --filter @getcompressly/frontend dev",
+    "build": "pnpm --recursive build",
+    "lint": "pnpm --recursive lint",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  },
+  "packageManager": "pnpm@9.12.3"
+}
