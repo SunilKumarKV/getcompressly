@@ -3,13 +3,40 @@ import path from "node:path";
 import { nanoid } from "nanoid";
 
 const unsafeNamePattern = /[^a-zA-Z0-9._-]/g;
-const executableExtensions = new Set([".exe", ".sh", ".bat", ".cmd", ".msi", ".app", ".dmg", ".js", ".jar", ".php", ".py", ".rb"]);
+const controlChars = /[\u0000-\u001f\u007f-\u009f]/g;
+const executableExtensions = new Set([
+  ".exe",
+  ".sh",
+  ".bat",
+  ".cmd",
+  ".msi",
+  ".app",
+  ".dmg",
+  ".js",
+  ".jar",
+  ".php",
+  ".py",
+  ".rb",
+  ".apk",
+  ".zip",
+  ".rar",
+  ".html",
+  ".htm",
+  ".svg"
+]);
 
 export function sanitizeFileName(fileName: string) {
-  const parsed = path.parse(fileName);
+  const parsed = path.parse(path.basename(fileName).replace(controlChars, ""));
   const base = parsed.name.replace(unsafeNamePattern, "-").slice(0, 80) || "file";
   const ext = parsed.ext.toLowerCase().replace(unsafeNamePattern, "");
   return `${base}-${nanoid(8)}${ext}`;
+}
+
+export function sanitizeDisplayFileName(fileName: string) {
+  const parsed = path.parse(path.basename(fileName).replace(controlChars, ""));
+  const base = parsed.name.replace(unsafeNamePattern, "-").slice(0, 100) || "file";
+  const ext = parsed.ext.toLowerCase().replace(unsafeNamePattern, "");
+  return `${base}${ext}`;
 }
 
 export function isExecutableFile(fileName: string) {

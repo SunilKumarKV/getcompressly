@@ -5,6 +5,7 @@
   "description": "Production-ready PDF and image compression SaaS monorepo.",
   "scripts": {
     "dev": "pnpm --parallel --filter @getcompressly/backend --filter @getcompressly/frontend dev",
+    "dev:worker": "pnpm --filter @getcompressly/backend worker",
     "build": "pnpm --recursive build",
     "lint": "pnpm --recursive lint",
     "format": "prettier --write ."

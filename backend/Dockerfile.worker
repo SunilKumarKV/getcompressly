@@ -1,0 +1,29 @@
+FROM node:22-bookworm-slim AS base
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ghostscript qpdf poppler-utils ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+RUN corepack enable
+
+FROM base AS deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY backend/package.json backend/package.json
+COPY shared/package.json shared/package.json
+RUN pnpm install --frozen-lockfile
+
+FROM deps AS build
+COPY backend backend
+COPY shared shared
+RUN pnpm --filter @getcompressly/backend prisma:generate
+RUN pnpm --filter @getcompressly/shared build
+RUN pnpm --filter @getcompressly/backend build
+
+FROM base AS runtime
+ENV NODE_ENV=production
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=build /app/backend ./backend
+COPY --from=build /app/shared ./shared
+WORKDIR /app/backend
+CMD ["pnpm", "start:worker"]

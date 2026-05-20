@@ -11,11 +11,11 @@ function startOfDay() {
 }
 
 export async function getUsageLimit(user: Express.User | undefined) {
-  if (!user) return { dailyLimit: env.FREE_DAILY_LIMIT, maxFileSizeMb: env.MAX_FILE_SIZE_MB, batchLimit: 3, plan: "GUEST" as const };
+  if (!user) return { dailyLimit: env.FREE_DAILY_LIMIT, maxFileSizeMb: env.FREE_MAX_FILE_SIZE_MB, batchLimit: 3, plan: "GUEST" as const };
   const plan = await prisma.plan.findUnique({ where: { name: user.plan } });
   return {
     dailyLimit: plan?.dailyLimit ?? (user.plan === PlanType.PRO ? env.PRO_DAILY_LIMIT : env.FREE_DAILY_LIMIT),
-    maxFileSizeMb: plan?.maxFileSizeMb ?? (user.plan === PlanType.PRO ? 100 : env.MAX_FILE_SIZE_MB),
+    maxFileSizeMb: plan?.maxFileSizeMb ?? (user.plan === PlanType.PRO ? env.PRO_MAX_FILE_SIZE_MB : env.FREE_MAX_FILE_SIZE_MB),
     batchLimit: plan?.batchLimit ?? (user.plan === PlanType.PRO ? 20 : 3),
     plan: user.plan
   };

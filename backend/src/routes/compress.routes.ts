@@ -6,11 +6,13 @@ import { prisma } from "../config/prisma.js";
 import { env } from "../config/env.js";
 import { optionalAuth, requireAuth } from "../middleware/auth.js";
 import { enforceCompressionLimits } from "../middleware/limits.js";
+import { guestCompressRateLimiter, userCompressRateLimiter } from "../middleware/rateLimiters.js";
 import { upload, validateUploadedFiles } from "../middleware/upload.js";
-import { processCompressionJob } from "../services/compression.service.js";
+import { enqueueCompressionJob } from "../queues/compression.queue.js";
+import { storage } from "../services/storage.service.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { compressionPercentage, makeDownloadToken } from "../utils/files.js";
+import { compressionPercentage, makeDownloadToken, sanitizeDisplayFileName, sanitizeFileName } from "../utils/files.js";
 
 const router = Router();
 const schema = z.object({ compressionLevel: z.nativeEnum(CompressionLevel).default(CompressionLevel.medium) });
@@ -49,6 +51,8 @@ function jobDto(job: {
 router.post(
   "/",
   optionalAuth,
+  guestCompressRateLimiter,
+  userCompressRateLimiter,
   upload.array("files", 20),
   validateUploadedFiles,
   enforceCompressionLimits,
@@ -60,16 +64,18 @@ router.post(
 
     for (const file of files) {
       const fileType = file.mimetype === "application/pdf" ? FileType.PDF : FileType.IMAGE;
+      const safeOriginalName = sanitizeDisplayFileName(file.originalname);
+      const originalPath = await storage.saveOriginal(file.path, sanitizeFileName(file.originalname));
       const job = await prisma.compressionJob.create({
         data: {
           userId: req.user?.id,
-          originalFileName: file.originalname,
+          originalFileName: safeOriginalName,
           originalMimeType: file.mimetype,
           originalSize: file.size,
           compressionLevel,
           fileType,
           status: JobStatus.PENDING,
-          originalPath: file.path,
+          originalPath,
           downloadToken: makeDownloadToken(),
           expiresAt
         }
@@ -77,7 +83,7 @@ router.post(
       await prisma.usageLog.create({
         data: { userId: req.user?.id, ipAddress: req.ip ?? "unknown", action: "compress", fileSize: file.size }
       });
-      await processCompressionJob(job.id);
+      await enqueueCompressionJob(job.id);
       jobs.push(await prisma.compressionJob.findUniqueOrThrow({ where: { id: job.id } }));
     }
 
@@ -100,10 +106,11 @@ router.get(
 
 router.get(
   "/jobs/:id",
-  requireAuth,
+  optionalAuth,
   asyncHandler(async (req, res) => {
-    const job = await prisma.compressionJob.findFirst({ where: { id: req.params.id, userId: req.user!.id } });
+    const job = await prisma.compressionJob.findUnique({ where: { id: req.params.id } });
     if (!job) throw new AppError("Compression job not found", 404, "JOB_NOT_FOUND");
+    if (job.userId && job.userId !== req.user?.id) throw new AppError("Compression job not found", 404, "JOB_NOT_FOUND");
     res.json({ job: jobDto(job) });
   })
 );
@@ -116,8 +123,9 @@ router.get(
       throw new AppError("Download is unavailable", 404, "DOWNLOAD_NOT_FOUND");
     }
     if (job.expiresAt < new Date()) throw new AppError("Download has expired", 410, "DOWNLOAD_EXPIRED");
-    await fs.access(job.compressedPath);
-    res.download(job.compressedPath, `compressed-${job.originalFileName}`);
+    const localPath = await storage.getLocalPath(job.compressedPath);
+    await fs.access(localPath);
+    res.download(localPath, `compressed-${sanitizeDisplayFileName(job.originalFileName)}`);
   })
 );
 
@@ -128,8 +136,8 @@ router.delete(
     const job = await prisma.compressionJob.findFirst({ where: { id: req.params.id, userId: req.user!.id } });
     if (!job) throw new AppError("Compression job not found", 404, "JOB_NOT_FOUND");
     await prisma.compressionJob.delete({ where: { id: job.id } });
-    await fs.rm(job.originalPath, { force: true });
-    if (job.compressedPath) await fs.rm(job.compressedPath, { force: true });
+    await storage.remove(job.originalPath);
+    await storage.remove(job.compressedPath);
     res.status(204).send();
   })
 );

@@ -6,6 +6,7 @@ import { storage } from "../services/storage.service.js";
 import { AppError } from "../utils/AppError.js";
 import { isExecutableFile, sanitizeFileName } from "../utils/files.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { virusScanner } from "../services/virus-scanner.service.js";
 
 const allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const allowedExtensions = new Set([".jpg", ".jpeg", ".png", ".webp", ".pdf"]);
@@ -17,12 +18,12 @@ const multerStorage = multer.diskStorage({
 
 export const upload = multer({
   storage: multerStorage,
-  limits: { fileSize: env.MAX_FILE_SIZE_MB * 1024 * 1024, files: 20 },
+  limits: { fileSize: Math.max(env.MAX_FILE_SIZE_MB, env.PRO_MAX_FILE_SIZE_MB) * 1024 * 1024, files: 20 },
   fileFilter: (_req, file, cb) => {
     const lower = file.originalname.toLowerCase();
     const ext = lower.slice(lower.lastIndexOf("."));
     if (isExecutableFile(lower) || !allowedExtensions.has(ext)) {
-      cb(new AppError("Only JPG, PNG, WebP, and PDF files are allowed", 400, "INVALID_FILE_TYPE"));
+      cb(new AppError("Only JPG, PNG, WebP, and PDF files are allowed. Archives, executables, scripts, HTML, and SVG files are blocked.", 400, "INVALID_FILE_TYPE"));
       return;
     }
     cb(null, true);
@@ -34,8 +35,9 @@ export const validateUploadedFiles = asyncHandler(async (req, _res, next) => {
   if (files.length === 0) throw new AppError("Upload at least one file", 400, "NO_FILES");
 
   for (const file of files) {
+    await virusScanner.scan(file.path);
     const detected = await fileTypeFromFile(file.path);
-    const mime = detected?.mime ?? (file.mimetype === "application/pdf" ? "application/pdf" : "");
+    const mime = detected?.mime ?? "";
     if (!allowedMimeTypes.has(mime)) {
       await fs.rm(file.path, { force: true });
       throw new AppError("File contents do not match a supported image or PDF type", 400, "INVALID_MIME");

@@ -1,19 +1,14 @@
-import jwt from "jsonwebtoken";
-import { env } from "../config/env.js";
 import { prisma } from "../config/prisma.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-
-interface JwtPayload {
-  sub: string;
-}
+import { getAccessTokenFromRequest, verifyAccessToken } from "../services/auth.service.js";
 
 export const optionalAuth = asyncHandler(async (req, _res, next) => {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) return next();
+  const token = getAccessTokenFromRequest(req);
+  if (!token) return next();
 
   try {
-    const payload = jwt.verify(header.slice(7), env.JWT_SECRET) as JwtPayload;
+    const payload = verifyAccessToken(token);
     const user = await prisma.user.findUnique({ where: { id: payload.sub } });
     if (user) req.user = { id: user.id, email: user.email, role: user.role, plan: user.plan };
   } catch {

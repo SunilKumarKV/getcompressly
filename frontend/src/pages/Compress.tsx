@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, UploadCloud, XCircle } from "lucide-react";
 import type { CompressionLevel } from "@getcompressly/shared";
 import type { JobsResponse } from "../types";
@@ -22,7 +22,6 @@ function formatBytes(bytes: number | null | undefined) {
 export function Compress() {
   const [files, setFiles] = useState<File[]>([]);
   const [level, setLevel] = useState<CompressionLevel>("medium");
-  const [progress, setProgress] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [jobs, setJobs] = useState<JobsResponse["jobs"]>([]);
@@ -38,25 +37,40 @@ export function Compress() {
     setError("");
   }
 
+  useEffect(() => {
+    if (jobs.length === 0 || jobs.every((job) => job.status === "COMPLETED" || job.status === "FAILED")) return;
+    const timer = window.setInterval(() => {
+      void Promise.all(
+        jobs
+          .filter((job) => job.status === "PENDING" || job.status === "PROCESSING")
+          .map(async (job) => {
+            const { data } = await api.get<{ job: JobsResponse["jobs"][number] }>(`/compress/jobs/${job.id}`);
+            return data.job;
+          })
+      )
+        .then((updates) => {
+          setJobs((current) => current.map((job) => updates.find((update) => update.id === job.id) ?? job));
+        })
+        .catch((err) => setError(getApiError(err)));
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [jobs]);
+
   async function submit() {
     if (files.length === 0 || validation) {
       setError(validation || "Choose at least one PDF or image.");
       return;
     }
     setLoading(true);
-    setProgress(0);
     setError("");
     setJobs([]);
     const form = new FormData();
     files.forEach((file) => form.append("files", file));
     form.append("compressionLevel", level);
     try {
-      const { data } = await api.post<JobsResponse>("/compress", form, {
-        onUploadProgress: (event) => setProgress(event.total ? Math.round((event.loaded / event.total) * 100) : 50)
-      });
+      const { data } = await api.post<JobsResponse>("/compress", form);
       setJobs(data.jobs);
       setFiles([]);
-      setProgress(100);
     } catch (err) {
       setError(getApiError(err));
     } finally {
@@ -98,7 +112,7 @@ export function Compress() {
               </button>
             ))}
           </div>
-          {loading && <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"><div className="h-full bg-emerald-600" style={{ width: `${progress}%` }} /></div>}
+          {loading && <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200">Uploading files and creating compression jobs...</p>}
           {(error || validation) && <p className="mt-4 flex gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-200"><XCircle size={18} />{error || validation}</p>}
           <button onClick={submit} disabled={loading} className="mt-5 w-full rounded-lg bg-emerald-600 px-4 py-3 font-medium text-white disabled:opacity-60">
             {loading ? "Processing..." : "Compress now"}
@@ -113,7 +127,13 @@ export function Compress() {
               <div key={job.id} className="grid gap-3 rounded-lg border border-slate-200 p-4 md:grid-cols-[1fr_auto] dark:border-slate-800">
                 <div>
                   <p className="font-medium">{job.originalFileName}</p>
-                  <p className="text-sm text-slate-500">{job.status === "COMPLETED" ? `${formatBytes(job.originalSize)} to ${formatBytes(job.compressedSize)} (${job.compressionPercentage}% smaller)` : job.errorMessage}</p>
+                  <p className="text-sm text-slate-500">
+                    {job.status === "COMPLETED"
+                      ? `${formatBytes(job.originalSize)} to ${formatBytes(job.compressedSize)} (${job.compressionPercentage}% smaller)`
+                      : job.status === "FAILED"
+                        ? job.errorMessage
+                        : job.status}
+                  </p>
                 </div>
                 {job.downloadToken && <a className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white dark:bg-white dark:text-slate-950" href={downloadUrl(job.downloadToken)}><Download size={16} />Download</a>}
               </div>
