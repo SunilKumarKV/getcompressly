@@ -5,10 +5,50 @@ title: "[Bug]: "
 labels: bug
 ---
 
-## What happened?
+## Bug Summary
 
-## Steps to reproduce
+Describe the issue clearly.
 
-## Expected behavior
+## Steps to Reproduce
+
+1.
+2.
+3.
+
+## Expected Behavior
+
+What should happen?
+
+## Actual Behavior
+
+What happened instead?
+
+## Affected Area
+
+- [ ] Upload
+- [ ] Compression
+- [ ] Download
+- [ ] Authentication
+- [ ] Billing
+- [ ] Dashboard
+- [ ] Worker
+- [ ] API
+- [ ] Deployment
 
 ## Environment
+
+- Browser:
+- Device:
+- OS:
+
+## Logs / Screenshots
+
+Add logs, screenshots, or error traces.
+
+## Production Impact
+
+- [ ] Critical outage
+- [ ] User-facing issue
+- [ ] Security concern
+- [ ] Performance issue
+- [ ] Minor issue
